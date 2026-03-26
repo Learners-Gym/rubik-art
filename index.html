@@ -125,13 +125,20 @@
 
     /* GRID */
     #grid-wrapper { overflow: auto; }
-    #grid-container { display: inline-grid; gap: 2px; background: #0d0d1a; padding: 5px; border-radius: 8px; }
+    #grid-container { display: inline-grid; gap: 0; background: #0d0d1a; padding: 5px; border-radius: 8px; }
     .cell {
-      border-radius: 4px; cursor: pointer;
+      border-radius: 0; cursor: pointer;
       transition: transform 0.08s, box-shadow 0.08s;
-      border: 1.5px solid rgba(0,0,0,0.35);
+      /* 全辺に細い紺線（1マス境界） */
+      border: 1px solid rgba(60,100,180,0.55);
+      box-sizing: border-box;
       position: relative;
     }
+    /* 3×3ブロック境界：紺青太線で上書き */
+    .cell.block-left  { border-left:   3px solid rgba(30,80,200,0.95); }
+    .cell.block-top   { border-top:    3px solid rgba(30,80,200,0.95); }
+    .cell.block-right { border-right:  3px solid rgba(30,80,200,0.95); }
+    .cell.block-bottom{ border-bottom: 3px solid rgba(30,80,200,0.95); }
     .cell:hover { transform: scale(1.18); box-shadow: 0 0 8px rgba(255,255,255,0.4); z-index: 5; }
 
     /* TOOLTIP */
@@ -159,6 +166,51 @@
       border-top-color: #e94560; border-radius: 50%; animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== TEMPLATE SECTION ===== */
+    .template-section { margin-bottom: 18px; }
+    .template-section h2 { font-size: 0.88rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #2a3060; padding-bottom: 6px; }
+    .template-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 28px; }
+    .template-chip {
+      background: #0f2040; border: 1px solid #2a4080; color: #9cf; border-radius: 20px;
+      padding: 4px 11px; font-size: 0.75rem; cursor: pointer; transition: all 0.15s;
+      white-space: nowrap; display: flex; align-items: center; gap: 5px;
+    }
+    .template-chip:hover { background: #1a3a60; border-color: #4a80e0; color: #fff; }
+    .template-chip .del-btn {
+      color: #f88; font-size: 0.7rem; cursor: pointer; padding: 0 2px;
+      border: none; background: none; line-height: 1;
+    }
+    .template-chip .del-btn:hover { color: #f44; }
+    .btn-template-admin { background: #1a3060; color: #88b; border: 1px dashed #2a4080; border-radius: 8px; padding: 6px 10px; font-size: 0.78rem; cursor: pointer; width: 100%; text-align: center; transition: all 0.15s; margin-top: 4px; }
+    .btn-template-admin:hover { background: #1e3a70; border-color: #4a70c0; color: #aad; }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(5,8,20,0.82);
+      z-index: 10000; justify-content: center; align-items: center;
+      backdrop-filter: blur(3px);
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: #16213e; border: 1px solid #2a4080; border-radius: 14px;
+      padding: 28px 28px 22px; min-width: 300px; max-width: 380px; width: 90%;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+    }
+    .modal-box h3 { font-size: 1rem; color: #dde; margin-bottom: 16px; }
+    .modal-box label { font-size: 0.82rem; color: #aaa; display: block; margin-bottom: 5px; }
+    .modal-box input[type=text], .modal-box input[type=password] {
+      width: 100%; background: #0f3460; border: 1px solid #2a4080; color: #fff;
+      padding: 9px 12px; border-radius: 8px; font-size: 0.9rem; outline: none;
+      margin-bottom: 14px; transition: border-color 0.2s;
+    }
+    .modal-box input[type=text]:focus, .modal-box input[type=password]:focus { border-color: #4a80e0; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+    .modal-actions button { padding: 8px 18px; border: none; border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+    .modal-actions .btn-ok { background: #e94560; color: #fff; }
+    .modal-actions .btn-cancel { background: #0f3460; color: #aad; }
+    .modal-actions button:hover { opacity: 0.82; }
+    .modal-error { color: #f88; font-size: 0.78rem; margin-top: -10px; margin-bottom: 10px; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -170,9 +222,58 @@
 <div id="loading"><div class="spinner"></div><p style="color:#aaa;font-size:0.88rem;">変換中...</p></div>
 <div id="tooltip"></div>
 
+<!-- パスワード認証モーダル -->
+<div class="modal-overlay" id="modal-auth">
+  <div class="modal-box">
+    <h3>🔒 管理者認証</h3>
+    <label for="input-password">管理者パスワードを入力してください</label>
+    <input type="password" id="input-password" placeholder="パスワード" autocomplete="off">
+    <div class="modal-error" id="auth-error"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btn-auth-cancel">キャンセル</button>
+      <button class="btn-ok" id="btn-auth-ok">認証</button>
+    </div>
+  </div>
+</div>
+
+<!-- テンプレート名入力モーダル -->
+<div class="modal-overlay" id="modal-save-template">
+  <div class="modal-box">
+    <h3>💾 テンプレートとして保存</h3>
+    <label for="input-template-name">テンプレート名</label>
+    <input type="text" id="input-template-name" placeholder="例: 日の丸、ハート、オリジナル1…" maxlength="20">
+    <div class="modal-error" id="save-error"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btn-save-cancel">キャンセル</button>
+      <button class="btn-ok" id="btn-save-ok">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- テンプレート削除確認モーダル -->
+<div class="modal-overlay" id="modal-delete-template">
+  <div class="modal-box">
+    <h3>🗑 テンプレートを削除</h3>
+    <p style="font-size:0.88rem;color:#ccc;margin-bottom:16px;">「<span id="delete-template-name"></span>」を削除しますか？</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btn-delete-cancel">キャンセル</button>
+      <button class="btn-ok" id="btn-delete-ok" style="background:#c44;">削除</button>
+    </div>
+  </div>
+</div>
+
 <div class="container">
   <!-- ===== LEFT PANEL ===== -->
   <div class="panel">
+
+    <!-- TEMPLATES -->
+    <div class="panel-section template-section">
+      <h2>⭐ 保存済みテンプレート</h2>
+      <div class="template-chips" id="template-chips">
+        <span style="font-size:0.72rem;color:#555;">テンプレートはまだありません</span>
+      </div>
+      <button class="btn-template-admin" id="btn-open-save-template">🔒 管理者：テンプレートを保存</button>
+    </div>
 
     <!-- KEYWORD GENERATE -->
     <div class="panel-section keyword-section">
@@ -548,7 +649,17 @@ function renderGrid() {
 
   for (let i=0; i<gridSize*gridSize; i++) {
     const cell = document.createElement('div');
-    cell.className = 'cell';
+    const row = Math.floor(i / gridSize);
+    const col = i % gridSize;
+
+    // 3×3ブロック境界クラスを付与
+    let cls = 'cell';
+    if (col % 3 === 0)            cls += ' block-left';
+    if (row % 3 === 0)            cls += ' block-top';
+    if (col === gridSize - 1)     cls += ' block-right';
+    if (row === gridSize - 1)     cls += ' block-bottom';
+    cell.className = cls;
+
     cell.style.width = cellSize + 'px';
     cell.style.height = cellSize + 'px';
     const colorObj = COLORS.find(c=>c.id===gridData[i]);
@@ -1005,8 +1116,199 @@ function applyKeyword(kw) {
 }
 
 // ================================================================
+//  TEMPLATE SAVE / LOAD  (localStorage)
+// ================================================================
+
+// 管理者パスワード（ハッシュ値で保持）
+// パスワード: learners2024  →  SHA-256 なしでシンプルなハッシュ比較
+const ADMIN_PASS_HASH = btoa('learnersgym2024'); // Base64エンコード（簡易保護）
+
+let adminUnlocked = false;       // 認証済みフラグ（セッション中のみ有効）
+let pendingAction  = null;       // 認証後に実行するアクション
+let deleteTargetName = null;     // 削除対象テンプレート名
+
+// ---- LocalStorage キー ----
+const LS_KEY = 'rubikArtTemplates';
+
+function loadTemplatesFromStorage() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+  } catch(e) { return []; }
+}
+
+function saveTemplatesToStorage(templates) {
+  localStorage.setItem(LS_KEY, JSON.stringify(templates));
+}
+
+// ---- テンプレート一覧をチップとして描画 ----
+function renderTemplateChips() {
+  const chipsDiv = document.getElementById('template-chips');
+  const templates = loadTemplatesFromStorage();
+  chipsDiv.innerHTML = '';
+
+  if (templates.length === 0) {
+    chipsDiv.innerHTML = '<span style="font-size:0.72rem;color:#555;">テンプレートはまだありません</span>';
+    return;
+  }
+
+  templates.forEach(tpl => {
+    const chip = document.createElement('div');
+    chip.className = 'template-chip';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = tpl.name;
+    nameSpan.style.cursor = 'pointer';
+    nameSpan.title = `「${tpl.name}」を読み込む`;
+    nameSpan.addEventListener('click', () => applyTemplate(tpl));
+    chip.appendChild(nameSpan);
+
+    // 管理者が認証済みなら削除ボタンも表示
+    if (adminUnlocked) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'del-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = 'テンプレートを削除';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDeleteModal(tpl.name);
+      });
+      chip.appendChild(delBtn);
+    }
+
+    chipsDiv.appendChild(chip);
+  });
+}
+
+// ---- テンプレートをグリッドに適用 ----
+function applyTemplate(tpl) {
+  gridSize = tpl.size;
+  document.getElementById('grid-size').value = tpl.size;
+  gridData = [...tpl.data];
+  renderGrid();
+  updateCounts();
+  // キーワード欄に名前を表示
+  document.getElementById('keyword-input').value = '';
+  document.getElementById('keyword-result').textContent = `✅ テンプレート「${tpl.name}」を読み込みました`;
+  document.getElementById('keyword-result').className = 'keyword-result ok';
+}
+
+// ---- 認証モーダル ----
+function openAuthModal(onSuccess) {
+  pendingAction = onSuccess;
+  document.getElementById('input-password').value = '';
+  document.getElementById('auth-error').textContent = '';
+  document.getElementById('modal-auth').classList.add('show');
+  setTimeout(() => document.getElementById('input-password').focus(), 50);
+}
+
+function closeAuthModal() {
+  document.getElementById('modal-auth').classList.remove('show');
+  pendingAction = null;
+}
+
+document.getElementById('btn-auth-cancel').addEventListener('click', closeAuthModal);
+document.getElementById('btn-auth-ok').addEventListener('click', () => {
+  const entered = document.getElementById('input-password').value;
+  if (btoa(entered) === ADMIN_PASS_HASH) {
+    adminUnlocked = true;
+    closeAuthModal();
+    renderTemplateChips(); // 削除ボタンを表示するために再描画
+    if (pendingAction) pendingAction();
+  } else {
+    document.getElementById('auth-error').textContent = 'パスワードが違います。';
+    document.getElementById('input-password').value = '';
+    document.getElementById('input-password').focus();
+  }
+});
+document.getElementById('input-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-auth-ok').click();
+});
+
+// ---- テンプレート保存ボタン ----
+document.getElementById('btn-open-save-template').addEventListener('click', () => {
+  if (adminUnlocked) {
+    openSaveTemplateModal();
+  } else {
+    openAuthModal(() => openSaveTemplateModal());
+  }
+});
+
+// ---- 保存モーダル ----
+function openSaveTemplateModal() {
+  document.getElementById('input-template-name').value = '';
+  document.getElementById('save-error').textContent = '';
+  document.getElementById('modal-save-template').classList.add('show');
+  setTimeout(() => document.getElementById('input-template-name').focus(), 50);
+}
+
+function closeSaveTemplateModal() {
+  document.getElementById('modal-save-template').classList.remove('show');
+}
+
+document.getElementById('btn-save-cancel').addEventListener('click', closeSaveTemplateModal);
+document.getElementById('btn-save-ok').addEventListener('click', () => {
+  const name = document.getElementById('input-template-name').value.trim();
+  if (!name) {
+    document.getElementById('save-error').textContent = 'テンプレート名を入力してください。';
+    return;
+  }
+  const templates = loadTemplatesFromStorage();
+  if (templates.some(t => t.name === name)) {
+    document.getElementById('save-error').textContent = '同じ名前のテンプレートがすでに存在します。';
+    return;
+  }
+  if (gridData.length === 0) {
+    document.getElementById('save-error').textContent = 'グリッドにデータがありません。';
+    return;
+  }
+  templates.push({ name, size: gridSize, data: [...gridData] });
+  saveTemplatesToStorage(templates);
+  closeSaveTemplateModal();
+  renderTemplateChips();
+  document.getElementById('keyword-result').textContent = `💾 テンプレート「${name}」を保存しました！`;
+  document.getElementById('keyword-result').className = 'keyword-result ok';
+});
+document.getElementById('input-template-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-save-ok').click();
+});
+
+// ---- 削除モーダル ----
+function openDeleteModal(name) {
+  deleteTargetName = name;
+  document.getElementById('delete-template-name').textContent = name;
+  document.getElementById('modal-delete-template').classList.add('show');
+}
+
+function closeDeleteModal() {
+  document.getElementById('modal-delete-template').classList.remove('show');
+  deleteTargetName = null;
+}
+
+document.getElementById('btn-delete-cancel').addEventListener('click', closeDeleteModal);
+document.getElementById('btn-delete-ok').addEventListener('click', () => {
+  if (!deleteTargetName) return;
+  let templates = loadTemplatesFromStorage();
+  templates = templates.filter(t => t.name !== deleteTargetName);
+  saveTemplatesToStorage(templates);
+  closeDeleteModal();
+  renderTemplateChips();
+});
+
+// オーバーレイクリックで閉じる
+['modal-auth','modal-save-template','modal-delete-template'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) {
+      this.classList.remove('show');
+      if (id === 'modal-auth') pendingAction = null;
+      if (id === 'modal-delete-template') deleteTargetName = null;
+    }
+  });
+});
+
+// ================================================================
 //  INIT
 // ================================================================
+renderTemplateChips();
 initEmptyGrid();
 </script>
 </body>
